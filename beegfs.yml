@@ -1,0 +1,43 @@
+---
+- hosts:
+  - cluster_beegfs_mgmt
+  - cluster_beegfs_mds
+  - cluster_beegfs_oss
+  - cluster_beegfs_client
+  vars:
+    # BeegFS config
+    beegfs_state: present
+    beegfs_force_format: no
+    beegfs_interfaces:
+    - eth0
+    beegfs_rdma: no
+    beegfs_mgmt_host: "{{ groups['cluster_beegfs_mgmt'] | first }}"
+    beegfs_oss:
+    - path: /data/beegfs/beegfs_oss/path
+      port: 8003
+    beegfs_client:
+    - path: "/mnt/ohpc"
+      port: 8004
+  pre_tasks:
+    - name: Generate /etc/hosts file content
+      set_fact:
+        etc_hosts_content: |
+          {% for host in ansible_play_hosts %}{{ hostvars[host]['ansible_default_ipv4']['address'] }} {{ host }}.novalocal {{ host }}
+          {% endfor %}
+      run_once: true
+    - name: Create entries in /etc/hosts for all nodes
+      blockinfile:
+        path: /etc/hosts
+        create: no
+        state: present
+        block: "{{ hostvars[ansible_play_hosts[0]].etc_hosts_content }}"
+  roles:
+    - role: stackhpc.beegfs
+      beegfs_enable:
+        admon: false
+        mgmt: "{{ inventory_hostname in groups['cluster_beegfs_mgmt'] | default([]) }}"
+        meta: "{{ inventory_hostname in groups['cluster_beegfs_mds'] | default([]) }}"
+        oss: "{{ inventory_hostname in groups['cluster_beegfs_oss'] | default([]) }}"
+        client: "{{ inventory_hostname in groups['cluster_beegfs_client'] | default([]) }}"
+        tuning: false
+...
